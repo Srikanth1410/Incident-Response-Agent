@@ -1,0 +1,33 @@
+# Environment variables — never commit secrets
+.env
+*.env
+
+# Go build artifacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# Go test cache
+*.test
+*.out
+
+# Go module download cache
+vendor/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Frontend
+node_modules/
+frontend/dist/
+frontend/.next/
+"frontend copy"/
