@@ -29,7 +29,7 @@ export default function Home() {
       title: "Stuck Pending with 500 Webhook",
       tag: "MEDIUM RISK",
       tagColor: "bg-amber-950 text-amber-300 border-amber-800",
-      desc: "Gateway authorized ?89,000, but transaction stuck PENDING due to merchant HTTP 500 crashes.",
+      desc: "Gateway authorized ₹89,000, but transaction stuck PENDING due to merchant HTTP 500 crashes.",
     },
   ];
 
@@ -92,13 +92,13 @@ export default function Home() {
           {demoScenarios.map((demo) => (
             <Link
               key={demo.id}
-              href={/investigate?txn=}
+              href={`/investigate?txn=${demo.id}`}
               className="bg-slate-900 border border-slate-800 hover:border-indigo-600/60 p-5 rounded-xl transition-all flex flex-col justify-between group shadow-lg"
             >
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-mono font-bold text-indigo-300">{demo.id}</span>
-                  <span className={	ext-[10px] px-2 py-0.5 rounded font-mono font-bold border }>
+                  <span className={`text-[10px] px-2 py-0.5 rounded font-mono font-bold border ${demo.tagColor}`}>
                     {demo.tag}
                   </span>
                 </div>

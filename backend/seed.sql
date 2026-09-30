@@ -41,9 +41,69 @@ CREATE TABLE IF NOT EXISTS webhook_attempts (
 );
 
 -- ── Seed: clear existing test rows ───────────────────────────
-DELETE FROM webhook_attempts     WHERE transaction_id IN ('TXN-1001','TXN-1002','TXN-1003');
-DELETE FROM gateway_transactions WHERE transaction_id IN ('TXN-1001','TXN-1002','TXN-1003');
-DELETE FROM transactions         WHERE transaction_id IN ('TXN-1001','TXN-1002','TXN-1003');
+DELETE FROM webhook_attempts     WHERE transaction_id IN ('TXN-1001','TXN-1002','TXN-1003','TXN-DEMO-001','TXN-DEMO-002','TXN-DEMO-003');
+DELETE FROM gateway_transactions WHERE transaction_id IN ('TXN-1001','TXN-1002','TXN-1003','TXN-DEMO-001','TXN-DEMO-002','TXN-DEMO-003');
+DELETE FROM transactions         WHERE transaction_id IN ('TXN-1001','TXN-1002','TXN-1003','TXN-DEMO-001','TXN-DEMO-002','TXN-DEMO-003');
+
+-- ────────────────────────────────────────────────────────────
+-- Demo A — TXN-DEMO-001 (BASELINE INCIDENT - BEFORE LEARNING)
+-- Internal: FAILED | Gateway: AUTHORIZED | Webhook: TIMEOUT | Retry: 0
+-- Expected agent output: Cautious generic recommendation (no prior exact memory)
+-- ────────────────────────────────────────────────────────────
+INSERT INTO transactions VALUES (
+    'TXN-DEMO-001', 'MERCHANT-DEMO-A', 54000.00, 'INR', 'UPI',
+    'FAILED', 0, 'IK-DEMO-001',
+    NOW() - INTERVAL '4 hours', NOW() - INTERVAL '4 hours'
+);
+
+INSERT INTO gateway_transactions VALUES (
+    'GW-TXN-DEMO-001', 'TXN-DEMO-001', 'Stripe', 'AUTHORIZED',
+    '00', 'Payment authorized successfully', 'AUTH-DEMO-99120',
+    NOW() - INTERVAL '4 hours'
+);
+
+INSERT INTO webhook_attempts VALUES
+    ('WH-DEMO-001-1', 'TXN-DEMO-001', 'MERCHANT-DEMO-A', 1, 0, 'TIMEOUT', 30000, 'Connection timed out after 30s', NOW() - INTERVAL '4 hours');
+
+-- ────────────────────────────────────────────────────────────
+-- Demo B — TXN-DEMO-002 (SIMILAR INCIDENT - AFTER LEARNING)
+-- Internal: FAILED | Gateway: AUTHORIZED | Webhook: TIMEOUT | Retry: 1
+-- Expected agent output: Specific recommendation backed by newly learned memory INC-DEMO-001
+-- ────────────────────────────────────────────────────────────
+INSERT INTO transactions VALUES (
+    'TXN-DEMO-002', 'MERCHANT-DEMO-B', 54000.00, 'INR', 'UPI',
+    'FAILED', 1, 'IK-DEMO-002',
+    NOW() - INTERVAL '30 minutes', NOW() - INTERVAL '20 minutes'
+);
+
+INSERT INTO gateway_transactions VALUES (
+    'GW-TXN-DEMO-002', 'TXN-DEMO-002', 'Stripe', 'AUTHORIZED',
+    '00', 'Payment authorized successfully', 'AUTH-DEMO-77192',
+    NOW() - INTERVAL '30 minutes'
+);
+
+INSERT INTO webhook_attempts VALUES
+    ('WH-DEMO-002-1', 'TXN-DEMO-002', 'MERCHANT-DEMO-B', 1, 0, 'TIMEOUT', 30000, 'Connection timed out after 30s', NOW() - INTERVAL '30 minutes');
+
+-- ────────────────────────────────────────────────────────────
+-- Demo C — TXN-DEMO-003 (PROVE NO BLIND REUSE - ACTUALLY DECLINED)
+-- Internal: FAILED | Gateway: DECLINED | Webhook: SUCCESS | Retry: 0
+-- Expected agent output: Issuer decline, low duplicate risk, do NOT reconcile
+-- ────────────────────────────────────────────────────────────
+INSERT INTO transactions VALUES (
+    'TXN-DEMO-003', 'MERCHANT-DEMO-C', 12500.00, 'INR', 'CARD',
+    'FAILED', 0, 'IK-DEMO-003',
+    NOW() - INTERVAL '15 minutes', NOW() - INTERVAL '15 minutes'
+);
+
+INSERT INTO gateway_transactions VALUES (
+    'GW-TXN-DEMO-003', 'TXN-DEMO-003', 'Razorpay', 'DECLINED',
+    '05', 'Do not honor — insufficient funds', '',
+    NOW() - INTERVAL '15 minutes'
+);
+
+INSERT INTO webhook_attempts VALUES
+    ('WH-DEMO-003-1', 'TXN-DEMO-003', 'MERCHANT-DEMO-C', 1, 200, 'SUCCESS', 280, '', NOW() - INTERVAL '15 minutes');
 
 -- ────────────────────────────────────────────────────────────
 -- Case A — TXN-1001 (DANGEROUS MISMATCH)

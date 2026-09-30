@@ -1,7 +1,7 @@
 """
 scripts/seed_memories.py
 ========================
-Seeds 5 historical payment incidents into the Hindsight payrecall bank.
+Seeds 18 realistic historical payment incidents into the Hindsight payrecall bank.
 
 Run from the agent/ directory:
 
@@ -10,13 +10,9 @@ Run from the agent/ directory:
 Each incident is a narrative that captures:
   - what happened (symptom pattern)
   - the root cause
-  - the resolution steps taken
+  - the resolution steps taken (including failed attempts where applicable)
   - the outcome
   - a key lesson for future investigations
-
-Hindsight processes these into facts, entities, temporal information,
-and relationships — not just plain text — so future recall queries can
-find relevant incidents even when the wording differs.
 """
 import asyncio
 import sys
@@ -30,219 +26,234 @@ load_dotenv()
 
 from memory.hindsight import hindsight, BANK_ID, HINDSIGHT_AVAILABLE
 
-# ── 5 Historical incidents ────────────────────────────────────────────────────
+# ── 18 Realistic Historical Incidents ──────────────────────────────────────────
 
 INCIDENTS: list[str] = [
-
-    # ── INC-001: Classic FAILED/AUTHORIZED/TIMEOUT — the high-risk case ──────
+    # ── INC-001: Classic FAILED/AUTHORIZED/TIMEOUT — high risk baseline ───────
     """
     Incident INC-001. Transaction TXN-0901. Merchant MERCHANT-001.
     Amount: 42,000 INR. Payment method: UPI.
-
-    Symptom pattern:
-    The internal payment platform recorded status FAILED.
-    The external payment gateway (Stripe) recorded status AUTHORIZED with
-    authorization code AUTH-0901.
-    Two consecutive webhook delivery attempts both timed out after 30 seconds
-    with HTTP status 0 and webhook status TIMEOUT.
-
-    Root cause:
-    The gateway authorization completed successfully before any network issue
-    occurred. However, the merchant's webhook receiver endpoint was temporarily
-    unreachable, which caused both delivery attempts to time out. Because the
-    webhook callback never arrived, the internal platform's background job
-    marked the transaction as FAILED after the grace period expired.
-    The gateway authorization remained live and billable.
-
-    Resolution steps taken:
-    1. A payment operations engineer verified the gateway authorization was
-       still active in the Stripe dashboard.
-    2. The engineer placed a manual hold on further retry attempts to prevent
-       duplicate authorization.
-    3. The internal transaction record was manually reconciled to match the
-       gateway state (set to AUTHORIZED_PENDING_SETTLEMENT).
-    4. The merchant was notified. Settlement was monitored for 24 hours.
-    5. The gateway authorization settled normally. The transaction closed as
-       SETTLED.
-
-    Outcome: SUCCESS.
-
-    Key lesson:
-    When internal status is FAILED but gateway status is AUTHORIZED and
-    webhook attempts show TIMEOUT, do NOT allow a retry. The gateway
-    authorization is live. A retry would create a duplicate authorization
-    and risk double-charging the customer. Always verify and reconcile
-    the gateway state before any retry decision.
+    Symptom pattern: FAILED + AUTHORIZED + TIMEOUT.
+    Internal status: FAILED. Gateway (Stripe): AUTHORIZED (AUTH-0901).
+    Two webhook delivery attempts timed out (HTTP 0, TIMEOUT).
+    Root cause: Gateway authorized charge, but merchant webhook receiver was unreachable.
+    Internal platform timed out and marked transaction FAILED. Gateway authorization remained live.
+    Resolution: Verified Stripe dashboard, blocked retry queue, reconciled internal record to AUTHORIZED.
+    Outcome: SUCCESS. Settled normally.
+    Key lesson: When internal is FAILED and gateway is AUTHORIZED, never permit retry. Reconcile gateway state first.
     """,
 
-    # ── INC-002: Normal issuer decline — no mismatch, safe to retry ──────────
+    # ── INC-002: Normal issuer decline ───────────────────────────────────────
     """
     Incident INC-002. Transaction TXN-0902. Merchant MERCHANT-002.
     Amount: 8,500 INR. Payment method: CARD.
-
-    Symptom pattern:
-    The internal payment platform recorded status FAILED.
-    The payment gateway (Razorpay) recorded status DECLINED with
-    response code 05 and message "Do not honor — insufficient funds".
-    The merchant webhook delivery succeeded with HTTP 200 within 312ms.
-    Webhook status SUCCESS.
-
-    Root cause:
-    The card-issuing bank rejected the authorization because the customer's
-    account did not have sufficient funds. This is a hard decline from the
-    issuer. The gateway correctly reported DECLINED and the webhook notified
-    the merchant successfully.
-
-    Resolution steps taken:
-    1. Payment operations confirmed the issuer decline code 05.
-    2. No gateway authorization exists — the payment was never authorized.
-    3. The merchant was advised to prompt the customer to use an alternative
-       payment method.
-    4. No reconciliation was necessary. Internal and gateway states are
-       consistent (both FAILED / DECLINED).
-
-    Outcome: CLOSED. Customer switched to a different card. Payment succeeded
-    on the second attempt with a new transaction.
-
-    Key lesson:
-    When internal status is FAILED and gateway status is DECLINED and the
-    webhook delivered successfully, there is no mismatch. This is a genuine
-    issuer decline. Retrying the same card is unlikely to succeed immediately.
-    Advise the customer to use an alternative payment method or wait.
-    There is no duplicate-payment risk.
+    Symptom pattern: FAILED + DECLINED + SUCCESS.
+    Internal status: FAILED. Gateway (Razorpay): DECLINED (code 05 - Insufficient funds).
+    Webhook delivered successfully (HTTP 200).
+    Root cause: Legitimate issuer card decline. No state desync.
+    Resolution: Confirmed decline code, advised merchant to prompt customer for alternative payment method.
+    Outcome: CLOSED. No duplicate risk.
+    Key lesson: Consistent decline across gateway and platform requires no ledger override.
     """,
 
-    # ── INC-003: PENDING / AUTHORIZED / webhook HTTP 500 ─────────────────────
+    # ── INC-003: PENDING with HTTP 500 webhook ────────────────────────────────
     """
     Incident INC-003. Transaction TXN-0903. Merchant MERCHANT-003.
     Amount: 15,750 INR. Payment method: NET_BANKING.
-
-    Symptom pattern:
-    The internal payment platform recorded status PENDING.
-    The payment gateway (PayU) recorded status AUTHORIZED with
-    authorization code AUTH-0903.
-    Two webhook delivery attempts both returned HTTP 500 with webhook status
-    FAILED and error message "Internal Server Error from merchant endpoint".
-
-    Root cause:
-    The gateway authorized the payment. However, the merchant's webhook
-    receiver was throwing an unhandled exception on its server, causing HTTP
-    500 responses. Because no successful webhook delivery occurred, the
-    internal platform kept the transaction in PENDING state instead of
-    advancing it to AUTHORIZED or SETTLED.
-
-    Resolution steps taken:
-    1. Payment operations identified the HTTP 500 pattern in webhook logs.
-    2. The merchant's engineering team was contacted. They identified a
-       deployment bug in their webhook handler.
-    3. After the merchant fixed the handler, a manual webhook replay was
-       triggered.
-    4. The webhook delivered successfully (HTTP 200). Internal status
-       advanced to SETTLED.
-
-    Outcome: SUCCESS after merchant-side fix and webhook replay.
-
-    Key lesson:
-    When internal status is PENDING and gateway status is AUTHORIZED but
-    webhook attempts return HTTP 500, the problem is on the merchant's server
-    side, not in the payment gateway or internal platform. Do not mark the
-    transaction as failed. Contact the merchant's engineering team, request
-    a fix, then replay the webhook. The gateway authorization is valid and
-    should eventually settle.
+    Symptom pattern: PENDING + AUTHORIZED + HTTP 500.
+    Internal status: PENDING. Gateway (PayU): AUTHORIZED (AUTH-0903).
+    Webhook attempts returned HTTP 500 (Internal Server Error from merchant endpoint).
+    Root cause: Merchant webhook endpoint crashed under burst traffic.
+    Resolution: Contacted merchant engineers. Fixed handler crash, triggered manual webhook replay (HTTP 200).
+    Outcome: SUCCESS. Advanced to SETTLED.
+    Key lesson: Do not void valid gateway authorization on merchant 500 errors; replay webhook after receiver recovers.
     """,
 
-    # ── INC-004: Duplicate authorization caused by premature retry ────────────
+    # ── INC-004: Premature retry duplicate authorization ──────────────────────
     """
     Incident INC-004. Transaction TXN-0904. Merchant MERCHANT-004.
     Amount: 120,000 INR. Payment method: CARD.
-
-    Symptom pattern:
-    The internal payment platform recorded status FAILED.
-    The payment gateway (Stripe) recorded status AUTHORIZED.
-    Webhook delivery timed out.
-    A second payment attempt was made before reconciliation of the first.
-
-    Root cause:
-    After the first webhook timed out and the internal platform showed FAILED,
-    the merchant's system automatically retried the payment using the same
-    customer card. The gateway authorized the second payment as well because
-    the first authorization had not yet been voided. This resulted in two
-    live gateway authorizations for the same customer intent.
-
-    Resolution steps taken:
-    1. Payment operations identified both authorizations in the gateway
-       dashboard.
-    2. The second (duplicate) authorization was immediately voided through
-       the gateway.
-    3. The first authorization was reconciled with the correct internal
-       transaction record.
-    4. Settlement proceeded on the first authorization only.
-    5. The merchant was advised to implement idempotency checks before
-       retrying payments.
-
-    Outcome: SUCCESS after manual void and reconciliation. No customer
-    was double-charged, but resolution required significant manual work.
-
-    Key lesson:
-    This is the highest-risk scenario. When internal status is FAILED but
-    gateway status is AUTHORIZED, never allow an automatic retry before
-    verifying the gateway state. Use idempotency keys. A premature retry
-    after a webhook timeout can create a second authorization that is
-    extremely difficult to unwind — especially for large amounts.
-    Always block retries first, verify, then decide.
+    Symptom pattern: FAILED + AUTHORIZED + duplicate retry.
+    Internal status: FAILED. Gateway (Stripe): AUTHORIZED.
+    Root cause: Automated retry worker triggered before verifying existing gateway authorization, creating double charge.
+    Resolution: Voided duplicate authorization immediately, reconciled initial authorization.
+    Outcome: SUCCESS after manual void. Prevented double billing.
+    Key lesson: Blind retry on FAILED internally + AUTHORIZED externally causes duplicate payments. Always block retry first.
     """,
 
-    # ── INC-005: Gateway timeout — no authorization at all ───────────────────
+    # ── INC-005: Gateway timeout without authorization ───────────────────────
     """
     Incident INC-005. Transaction TXN-0905. Merchant MERCHANT-005.
     Amount: 5,200 INR. Payment method: UPI.
+    Symptom pattern: FAILED + TIMEOUT + SUCCESS.
+    Internal status: FAILED. Gateway status: TIMEOUT. Webhook delivered (HTTP 200).
+    Root cause: UPI bank switch timed out before creating authorization. No money moved.
+    Resolution: Verified no gateway authorization existed. Triggered safe retry with idempotency key.
+    Outcome: SUCCESS on second attempt.
+    Key lesson: When gateway status is TIMEOUT (not AUTHORIZED), retry is safe once rails recover.
+    """,
 
-    Symptom pattern:
-    The internal payment platform recorded status FAILED.
-    The payment gateway recorded status TIMEOUT — the gateway itself timed out
-    while attempting to communicate with the UPI rails.
-    Webhook delivery succeeded with HTTP 200 and status SUCCESS.
+    # ── INC-006: Asynchronous gateway webhook drop ───────────────────────────
+    """
+    Incident INC-006. Transaction TXN-0906. Merchant MERCHANT-006.
+    Amount: 28,000 INR. Payment method: NET_BANKING.
+    Symptom pattern: PENDING + AUTHORIZED + TIMEOUT.
+    Internal status: PENDING. Gateway: AUTHORIZED. Webhook dropped in transit.
+    Root cause: Network partition between gateway callback dispatcher and internal ingester.
+    Resolution: Ingestion poller queried gateway GET /status API directly, found AUTHORIZED, and reconciled state.
+    Outcome: SUCCESS. Order released to shipping.
+    Key lesson: Direct gateway status polling resolves silent webhook drops.
+    """,
 
-    Root cause:
-    The UPI network was experiencing intermittent latency. The gateway sent
-    the payment instruction but did not receive a response before its own
-    timeout threshold. No authorization was created. The gateway reported
-    TIMEOUT and the internal platform correctly recorded FAILED.
+    # ── INC-007: Webhook receiver timeout during flash sale ───────────────────
+    """
+    Incident INC-007. Transaction TXN-0907. Merchant MERCHANT-007.
+    Amount: 9,999 INR. Payment method: UPI.
+    Symptom pattern: FAILED + AUTHORIZED + TIMEOUT.
+    Root cause: Flash sale load caused merchant database connection pool exhaustion.
+    Resolution: Paused retry worker, waited for merchant DB pool scaling, redrove webhook batch.
+    Outcome: SUCCESS.
+    Key lesson: Distinguish transient infrastructure exhaustion from persistent transaction rejection.
+    """,
 
-    Resolution steps taken:
-    1. Payment operations confirmed the gateway shows TIMEOUT (not AUTHORIZED
-       or DECLINED). This means no money movement occurred.
-    2. Because no gateway authorization exists, a retry is safe.
-    3. A new payment attempt was created with the same idempotency key.
-    4. The retry succeeded on the second attempt once UPI latency resolved.
+    # ── INC-008: Idempotency key conflict on parallel checkout ───────────────
+    """
+    Incident INC-008. Transaction TXN-0908. Merchant MERCHANT-008.
+    Amount: 34,500 INR. Payment method: CARD.
+    Symptom pattern: AUTHORIZED + duplicate retry + IDEMPOTENCY_CONFLICT.
+    Root cause: Customer rapid double-clicked Pay button with same idempotency key.
+    Resolution: First authorization respected, second request de-duplicated and returned original auth receipt.
+    Outcome: SUCCESS. Single charge confirmed.
+    Key lesson: Idempotency keys must be enforced strictly at the gateway boundary.
+    """,
 
-    Outcome: SUCCESS on retry.
+    # ── INC-009: Settlement batch delay after gateway maintenance ─────────────
+    """
+    Incident INC-009. Transaction TXN-0909. Merchant MERCHANT-009.
+    Amount: 67,000 INR. Payment method: WIRE.
+    Symptom pattern: AUTHORIZED + SETTLEMENT_PENDING.
+    Root cause: Bank clearing window delayed by banking holiday.
+    Resolution: Verified gateway authorization was irrevocable. Put settlement alert on hold for 24h. Settled cleanly.
+    Outcome: SUCCESS.
+    Key lesson: Settlement pending does not require transaction reversal if authorization is irrevocable.
+    """,
 
-    Key lesson:
-    When internal status is FAILED and gateway status is TIMEOUT (not
-    AUTHORIZED), there is no duplicate-payment risk. The gateway never
-    authorized the payment. Retrying is safe once the gateway-side issue
-    resolves. This is fundamentally different from the INC-001 pattern
-    where the gateway status was AUTHORIZED. Always distinguish between
-    gateway TIMEOUT and gateway AUTHORIZED before deciding on retry.
+    # ── INC-010: Acquirer batch format rejection ──────────────────────────────
+    """
+    Incident INC-010. Transaction TXN-0910. Merchant MERCHANT-010.
+    Amount: 210,000 INR. Payment method: CORPORATE_CARD.
+    Symptom pattern: AUTHORIZED + SETTLEMENT_FAILED.
+    Root cause: Mismatched merchant category code (MCC) in batch settlement header.
+    Resolution: Updated acquirer batch header formatting and resubmitted settlement file.
+    Outcome: SUCCESS on file resubmission.
+    Key lesson: Authorization and settlement are decoupled; settlement errors do not invalidate authorization.
+    """,
+
+    # ── INC-011: Multi-attempt remediation with failed actions ────────────────
+    """
+    Incident INC-011. Transaction TXN-0911. Merchant MERCHANT-011.
+    Amount: 48,000 INR. Payment method: UPI.
+    Symptom pattern: FAILED + AUTHORIZED + TIMEOUT.
+    Internal status: FAILED. Gateway status: AUTHORIZED. Webhook: TIMEOUT.
+    Remediation attempts:
+      Attempt 1: Restart payment ingestion service. Result: FAILED (did not recover missing webhook payload).
+      Attempt 2: Automated retry queue fired payment again. Result: FAILED (duplicate authorization error).
+      Attempt 3: Manual gateway reconciliation through dashboard. Result: SUCCESS (ledger synchronized).
+    Outcome: SUCCESS on Attempt 3 after Attempts 1 & 2 failed.
+    Key lesson: Across historical incidents, service restart frequently does not resolve webhook drops. Gateway reconciliation before retry has the highest success rate.
+    """,
+
+    # ── INC-012: Double checkout submission without idempotency ──────────────
+    """
+    Incident INC-012. Transaction TXN-0912. Merchant MERCHANT-012.
+    Amount: 18,200 INR. Payment method: CARD.
+    Symptom pattern: FAILED + AUTHORIZED + duplicate retry.
+    Attempt 1: Cancel transaction. FAILED (gateway charge was already committed).
+    Attempt 2: Void gateway authorization. SUCCESS (funds released back to cardholder).
+    Outcome: SUCCESS.
+    Key lesson: Never mark as canceled without voiding external authorization first.
+    """,
+
+    # ── INC-013: Merchant SSL handshake failure ───────────────────────────────
+    """
+    Incident INC-013. Transaction TXN-0913. Merchant MERCHANT-013.
+    Amount: 14,000 INR. Payment method: NET_BANKING.
+    Symptom pattern: PENDING + AUTHORIZED + WEBHOOK_SSL_ERROR.
+    Root cause: Merchant expired their TLS certificate on their webhook endpoint domain.
+    Resolution: Merchant renewed SSL certificate. Triggered manual replay.
+    Outcome: SUCCESS.
+    Key lesson: SSL failures mean merchant is completely blind to incoming payments; check certificate validity.
+    """,
+
+    # ── INC-014: Fraud velocity card decline ──────────────────────────────────
+    """
+    Incident INC-014. Transaction TXN-0914. Merchant MERCHANT-014.
+    Amount: 95,000 INR. Payment method: CARD.
+    Symptom pattern: FAILED + DECLINED + SUCCESS.
+    Root cause: Card network fraud rule triggered (velocity check exceeded).
+    Resolution: Verified genuine decline. Blocked automated retries to prevent cardholder lock.
+    Outcome: CLOSED.
+    Key lesson: Fraud declines should never be auto-retried.
+    """,
+
+    # ── INC-015: Foreign exchange quote expiration ───────────────────────────
+    """
+    Incident INC-015. Transaction TXN-0915. Merchant MERCHANT-015.
+    Amount: 140,000 INR (approx $1,680 USD). Payment method: INT_CARD.
+    Symptom pattern: FAILED + AUTHORIZED + FX_MISMATCH.
+    Root cause: 15-minute FX lock expired during 3D-Secure authentication.
+    Resolution: Reconciled transaction with updated FX rate from processor.
+    Outcome: SUCCESS.
+    Key lesson: Cross-border payments require FX settlement validation.
+    """,
+
+    # ── INC-016: Webhook HMAC signature mismatch ──────────────────────────────
+    """
+    Incident INC-016. Transaction TXN-0916. Merchant MERCHANT-016.
+    Amount: 31,000 INR. Payment method: UPI.
+    Symptom pattern: PENDING + AUTHORIZED + HTTP 401.
+    Root cause: Merchant rotated webhook secret key without updating secondary verification secret.
+    Resolution: Merchant reconfigured signing secret. Webhook replayed and accepted.
+    Outcome: SUCCESS.
+    Key lesson: HTTP 401 on webhooks indicates signature mismatch rather than transaction failure.
+    """,
+
+    # ── INC-017: Bank rail temporary 503 maintenance ─────────────────────────
+    """
+    Incident INC-017. Transaction TXN-0917. Merchant MERCHANT-017.
+    Amount: 7,500 INR. Payment method: UPI.
+    Symptom pattern: FAILED + GATEWAY_503 + TIMEOUT.
+    Root cause: Scheduled NPCI core banking maintenance window. No authorization created.
+    Resolution: Verified zero authorization on gateway. Safe retry triggered after maintenance window.
+    Outcome: SUCCESS.
+    Key lesson: Gateway 503 with zero authorization is safe to retry.
+    """,
+
+    # ── INC-018: Multi-attempt database lock failure ──────────────────────────
+    """
+    Incident INC-018. Transaction TXN-0918. Merchant MERCHANT-018.
+    Amount: 62,000 INR. Payment method: CARD.
+    Symptom pattern: FAILED + AUTHORIZED + TIMEOUT.
+    Remediation attempts:
+      Attempt 1: Blind database state update without gateway verification. FAILED (concurrency lock conflict).
+      Attempt 2: Gateway API reconciliation call followed by row lock. SUCCESS.
+    Outcome: SUCCESS.
+    Key lesson: Always verify external gateway state before updating internal ledger records.
     """,
 ]
-
-
-# ── Seeding logic ─────────────────────────────────────────────────────────────
 
 async def seed() -> None:
     if not HINDSIGHT_AVAILABLE:
         print("[ERROR] hindsight-client not installed. Run: pip install hindsight-client")
         sys.exit(1)
 
-    print(f"\nSeeding {len(INCIDENTS)} historical incidents into Hindsight")
+    print(f"\nSeeding {len(INCIDENTS)} realistic historical incidents into Hindsight")
     print(f"  Bank ID  : {BANK_ID}")
     print(f"  Endpoint : {os.getenv('HINDSIGHT_BASE_URL', 'http://localhost:8888')}")
     print()
 
     for i, incident in enumerate(INCIDENTS, start=1):
-        incident_id = f"INC-00{i}"
+        incident_id = f"INC-{i:03d}"
         print(f"  [{i}/{len(INCIDENTS)}] Retaining {incident_id} ...", end=" ", flush=True)
         try:
             await hindsight.aretain(bank_id=BANK_ID, content=incident.strip())
@@ -251,8 +262,6 @@ async def seed() -> None:
             print(f"✗  ERROR: {exc}")
 
     print(f"\n✅ Done. {len(INCIDENTS)} incidents retained in bank '{BANK_ID}'.")
-    print("\nNext step — verify recall works:")
-    print("  python scripts/test_recall.py")
 
 
 if __name__ == "__main__":

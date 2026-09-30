@@ -1,4 +1,4 @@
-﻿export interface Transaction {
+export interface Transaction {
   transaction_id: string;
   amount: number;
   currency: string;
@@ -27,6 +27,13 @@ export interface WebhookAttempt {
   timestamp?: string;
 }
 
+export interface IncidentAttempt {
+  attempt_number: number;
+  action: string;
+  result: "SUCCESS" | "FAILED";
+  note?: string;
+}
+
 export interface HistoricalIncident {
   incident_id: string;
   relevance?: number;
@@ -35,6 +42,7 @@ export interface HistoricalIncident {
   resolution: string;
   outcome?: string;
   why_relevant?: string[];
+  attempts?: IncidentAttempt[];
 }
 
 export interface PatternInsights {
@@ -43,6 +51,30 @@ export interface PatternInsights {
   failed_action?: string;
   highest_risk?: string;
   summary?: string;
+}
+
+export interface MemoryComparison {
+  without_memory: {
+    diagnosis: string;
+    recommendation: string[];
+    confidence: string;
+  };
+  with_memory: {
+    diagnosis: string;
+    historical_evidence: string;
+    previous_fix: string;
+    risk: string;
+    recommendation: string[];
+  };
+}
+
+export interface MemoryGrowthStats {
+  resolved_experiences: number;
+  successful_resolutions: number;
+  failed_actions_learned: number;
+  recurring_patterns: number;
+  last_learned_incident?: string;
+  has_new_growth?: boolean;
 }
 
 export interface InvestigationResponse {
@@ -56,6 +88,9 @@ export interface InvestigationResponse {
   diagnosis: string;
   risk_level: "LOW" | "MEDIUM" | "HIGH";
   recommendation: string[];
+  learning_stage?: "BEFORE_LEARNING" | "AFTER_LEARNING" | "NON_MATCHING_REASONING";
+  comparison?: MemoryComparison;
+  memory_growth?: MemoryGrowthStats;
 }
 
 export interface ResolutionPayload {
@@ -70,4 +105,5 @@ export interface ResolutionResponse {
   message: string;
   incident_id: string;
   memory_retained: boolean;
+  new_growth?: MemoryGrowthStats;
 }

@@ -1,4 +1,4 @@
-﻿import { InvestigationResponse, ResolutionPayload, ResolutionResponse } from "@/types/investigation";
+import { InvestigationResponse, ResolutionPayload, ResolutionResponse } from "@/types/investigation";
 
 export async function investigateTransaction(transactionId: string): Promise<InvestigationResponse> {
   const res = await fetch("/api/agent/investigate", {
@@ -11,7 +11,7 @@ export async function investigateTransaction(transactionId: string): Promise<Inv
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.error || Investigation failed with status );
+    throw new Error(errorData.error || `Investigation failed with status ${res.status}`);
   }
 
   return res.json();
@@ -21,7 +21,7 @@ export async function resolveIncident(
   incidentId: string,
   payload: ResolutionPayload
 ): Promise<ResolutionResponse> {
-  const res = await fetch(/api/incidents//resolve, {
+  const res = await fetch(`/api/incidents/${incidentId}/resolve`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -31,7 +31,7 @@ export async function resolveIncident(
 
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.error || Resolution failed with status );
+    throw new Error(errorData.error || `Resolution failed with status ${res.status}`);
   }
 
   return res.json();

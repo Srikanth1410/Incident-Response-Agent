@@ -1,14 +1,14 @@
 "use client";
 
 import React from "react";
-import { Database, BrainCircuit, CheckCircle2, AlertOctagon, TrendingUp } from "lucide-react";
+import { Database, BrainCircuit, CheckCircle2, AlertOctagon, TrendingUp, Sparkles, BookOpen } from "lucide-react";
 
 export default function InsightsPage() {
   const stats = [
     { label: "Incidents Learned", value: "23", desc: "Stored in Hindsight bank" },
     { label: "Successful Resolutions", value: "18", desc: "Remediated without duplicate charge" },
     { label: "Failed Actions Remembered", value: "11", desc: "Blocked from repeating" },
-    { label: "Common Patterns Identified", value: "7", desc: "Synthesized via areflect()" },
+    { label: "Common Patterns", value: "7", desc: "Synthesized via areflect()" },
   ];
 
   const patterns = [
@@ -24,7 +24,7 @@ export default function InsightsPage() {
     },
     {
       id: "2",
-      pattern: "PENDING + AUTHORIZED + HTTP 500",
+      pattern: "PENDING + AUTHORIZED + WEBHOOK 500",
       observed: "4 incidents",
       risk: "MEDIUM (Order Fulfillment Blocked)",
       successfulAction: "Webhook retry with exponential backoff after receiver recovers",
@@ -50,11 +50,11 @@ export default function InsightsPage() {
         <div className="flex items-center gap-2 mb-1">
           <Database className="w-6 h-6 text-purple-400" />
           <h1 className="text-2xl font-bold text-slate-100">
-            PayRecall Operational Memory & Cross-Incident Intelligence
+            PayRecall Experience
           </h1>
         </div>
         <p className="text-sm text-slate-400">
-          Synthesized across retained payment incident resolutions via Hindsight <code>areflect()</code>.
+          Persistent operational memory bank and cross-incident intelligence synthesized via Hindsight <code>areflect()</code>.
         </p>
       </div>
 
@@ -76,17 +76,17 @@ export default function InsightsPage() {
         ))}
       </div>
 
-      {/* Cross-Incident Analysis */}
+      {/* Historical Intelligence */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-xl space-y-6">
         <div className="flex items-center justify-between pb-3 border-b border-slate-800">
           <div className="flex items-center gap-2">
             <BrainCircuit className="w-5 h-5 text-indigo-400" />
             <h2 className="text-base font-semibold text-slate-100">
-              Synthesized Operational Patterns (Hindsight Reflect)
+              Historical Intelligence
             </h2>
           </div>
           <span className="text-xs bg-indigo-950 text-indigo-300 border border-indigo-800 px-2.5 py-0.5 rounded-full font-mono">
-            areflect(budget=&quot;mid&quot;)
+            Hindsight reflect()
           </span>
         </div>
 

@@ -1,27 +1,48 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { resolveIncident } from "@/lib/api";
-import { GraduationCap, CheckCircle2, Loader2, Sparkles } from "lucide-react";
+import {
+  GraduationCap,
+  CheckCircle2,
+  Loader2,
+  Sparkles,
+  Database,
+  Save,
+  RotateCcw,
+  ArrowRight,
+} from "lucide-react";
 
 interface Props {
   incidentId: string;
   defaultRootCause?: string;
   defaultAction?: string;
+  onSuccess?: (incidentId: string) => void;
+  onNextDemo?: (txnId: string) => void;
 }
 
 export default function ResolutionForm({
   incidentId,
-  defaultRootCause = "Webhook state mismatch after endpoint gateway lag",
-  defaultAction = "Reconcile gateway authorization & update ledger",
+  defaultRootCause = "Webhook timeout prevented state reconciliation",
+  defaultAction = "Blocked retry and reconciled gateway state",
+  onSuccess,
+  onNextDemo,
 }: Props) {
   const [rootCause, setRootCause] = useState(defaultRootCause);
   const [actionTaken, setActionTaken] = useState(defaultAction);
   const [outcome, setOutcome] = useState<"SUCCESS" | "FAILED" | "PARTIAL">("SUCCESS");
-  const [notes, setNotes] = useState("Verified gateway authorization in dashboard. Marked transaction AUTHORIZED.");
+  const [notes, setNotes] = useState(
+    "Verified gateway authorization in Stripe dashboard. Blocked retry queue and reconciled internal transaction state to AUTHORIZED."
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResolved, setIsResolved] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    setRootCause(defaultRootCause);
+    setActionTaken(defaultAction);
+    setIsResolved(false);
+  }, [defaultRootCause, defaultAction, incidentId]);
 
   const handleResolve = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,12 +59,19 @@ export default function ResolutionForm({
         notes,
       });
       setIsResolved(true);
+      if (onSuccess) {
+        onSuccess(incidentId);
+      }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Failed to record resolution";
       setErrorMessage(msg);
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleReset = () => {
+    setIsResolved(false);
   };
 
   if (isResolved) {
@@ -56,35 +84,61 @@ export default function ResolutionForm({
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
               <h3 className="text-base font-bold text-emerald-200">
-                Incident Resolved & Learned
+                Incident Resolved & Experience Retained
               </h3>
-              <span className="text-xs bg-emerald-900 text-emerald-300 px-2 py-0.5 rounded font-mono">
+              <span className="text-xs bg-emerald-900 text-emerald-300 px-2.5 py-0.5 rounded font-mono font-bold">
                 {incidentId}
               </span>
             </div>
-            <p className="text-sm text-slate-300 mb-3">
-              This confirmed operational resolution has been recorded in PostgreSQL and retained into Hindsight memory.
+            <p className="text-sm text-slate-300 mb-4">
+              Your confirmed operational resolution has been recorded and retained into PayRecall&apos;s Hindsight memory bank.
             </p>
 
-            <div className="space-y-1.5 text-xs text-emerald-300 font-mono bg-slate-950/70 p-3 rounded-lg border border-emerald-900/60">
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">?</span>
-                <span>Incident marked resolved in system</span>
+            <div className="space-y-2 text-xs text-emerald-300 font-mono bg-slate-950/80 p-4 rounded-lg border border-emerald-900/80 max-w-xl">
+              <div className="flex items-center gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="font-semibold text-slate-200">✓ Incident resolved</span>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">?</span>
-                <span>Structured record saved to database</span>
+              <div className="flex items-center gap-2.5">
+                <Save className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="font-semibold text-slate-200">✓ Structured record saved to database</span>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-emerald-400">?</span>
-                <span>Experience retained in Hindsight memory bank</span>
+              <div className="flex items-center gap-2.5">
+                <Database className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="font-semibold text-slate-200">✓ Experience retained in Hindsight</span>
               </div>
             </div>
 
-            <p className="text-xs text-slate-400 mt-3 italic flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
-              PayRecall will now use this confirmed resolution during future investigations of similar transactions.
-            </p>
+            <div className="mt-4 p-3.5 bg-indigo-950/60 border border-indigo-700/80 rounded-lg max-w-xl">
+              <p className="text-xs text-indigo-200 flex items-center gap-2 font-medium">
+                <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
+                <span>
+                  <strong>PayRecall has learned this resolution.</strong> It can now use this experience to triage future investigations of similar transactions.
+                </span>
+              </p>
+            </div>
+
+            <div className="mt-5 flex flex-wrap items-center gap-3">
+              {onNextDemo && (
+                <button
+                  type="button"
+                  onClick={() => onNextDemo("TXN-DEMO-002")}
+                  className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold px-5 py-2.5 rounded-lg text-xs shadow-lg shadow-indigo-600/30 transition-all hover:translate-x-0.5"
+                >
+                  <span>Test Next: TXN-DEMO-002 (See Learned Memory in Action)</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={handleReset}
+                className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors px-3 py-2 rounded-lg bg-slate-900 border border-slate-800"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Update resolution notes
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -97,14 +151,14 @@ export default function ResolutionForm({
         <div className="flex items-center gap-2">
           <GraduationCap className="w-5 h-5 text-indigo-400" />
           <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-200">
-            Human Confirmation (Human-in-the-Loop)
+            Resolve Incident & Teach PayRecall
           </h3>
         </div>
-        <span className="text-xs text-slate-400 font-mono">Incident: {incidentId}</span>
+        <span className="text-xs text-slate-400 font-mono">Incident ID: {incidentId}</span>
       </div>
 
       <p className="text-xs text-slate-400 mb-4">
-        Validate the actual root cause and action taken. Confirming will teach PayRecall so the agent becomes continuously smarter.
+        Human-in-the-loop verification. Confirming the true root cause and action taken updates PostgreSQL and retains the experience in Hindsight so PayRecall becomes continuously smarter.
       </p>
 
       {errorMessage && (
@@ -124,20 +178,20 @@ export default function ResolutionForm({
               value={rootCause}
               onChange={(e) => setRootCause(e.target.value)}
               required
-              className="w-full bg-slate-950 border border-slate-700 text-slate-200 px-3.5 py-2 rounded-lg text-xs focus:outline-none focus:border-indigo-500 font-sans"
+              className="w-full bg-slate-950 border border-slate-700 text-slate-200 px-3.5 py-2.5 rounded-lg text-xs focus:outline-none focus:border-indigo-500 font-sans"
             />
           </div>
 
           <div>
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-              Action Taken (Resolution)
+              Action Taken
             </label>
             <input
               type="text"
               value={actionTaken}
               onChange={(e) => setActionTaken(e.target.value)}
               required
-              className="w-full bg-slate-950 border border-slate-700 text-slate-200 px-3.5 py-2 rounded-lg text-xs focus:outline-none focus:border-indigo-500 font-sans"
+              className="w-full bg-slate-950 border border-slate-700 text-slate-200 px-3.5 py-2.5 rounded-lg text-xs focus:outline-none focus:border-indigo-500 font-sans"
             />
           </div>
         </div>
@@ -150,7 +204,7 @@ export default function ResolutionForm({
             <select
               value={outcome}
               onChange={(e) => setOutcome(e.target.value as "SUCCESS" | "FAILED" | "PARTIAL")}
-              className="w-full bg-slate-950 border border-slate-700 text-slate-200 px-3 py-2 rounded-lg text-xs focus:outline-none focus:border-indigo-500"
+              className="w-full bg-slate-950 border border-slate-700 text-slate-200 px-3 py-2.5 rounded-lg text-xs focus:outline-none focus:border-indigo-500"
             >
               <option value="SUCCESS">SUCCESS</option>
               <option value="PARTIAL">PARTIAL</option>
@@ -160,14 +214,14 @@ export default function ResolutionForm({
 
           <div className="md:col-span-2">
             <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
-              Operator Notes
+              Notes
             </label>
             <input
               type="text"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Operational details for future recall..."
-              className="w-full bg-slate-950 border border-slate-700 text-slate-200 px-3.5 py-2 rounded-lg text-xs focus:outline-none focus:border-indigo-500"
+              className="w-full bg-slate-950 border border-slate-700 text-slate-200 px-3.5 py-2.5 rounded-lg text-xs focus:outline-none focus:border-indigo-500"
             />
           </div>
         </div>

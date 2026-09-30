@@ -1,6 +1,6 @@
 import React from "react";
 import { HistoricalIncident } from "@/types/investigation";
-import { Sparkles, ArrowRight } from "lucide-react";
+import { Sparkles, ArrowRight, CheckCircle2 } from "lucide-react";
 
 interface Props {
   memories: HistoricalIncident[];
@@ -36,51 +36,60 @@ export default function SimilarIncidents({ memories }: Props) {
           return (
             <div
               key={incident.incident_id}
-              className="bg-slate-950 border border-slate-800 rounded-lg p-4 flex flex-col justify-between hover:border-slate-700 transition-colors"
+              className="bg-slate-950 border border-slate-800 rounded-lg p-5 flex flex-col justify-between hover:border-indigo-600/40 transition-colors shadow-sm"
             >
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-mono font-bold text-indigo-300">
                     {incident.incident_id}
                   </span>
-                  <span className="text-xs px-2 py-0.5 rounded font-mono font-bold bg-indigo-950 text-indigo-300 border border-indigo-800">
+                  <span className="text-xs px-2.5 py-0.5 rounded font-mono font-bold bg-indigo-950 text-indigo-300 border border-indigo-800">
                     {matchPercent}% relevant
                   </span>
                 </div>
 
                 {incident.symptoms && (
-                  <div className="text-xs font-mono text-slate-400 mb-3 bg-slate-900 px-2 py-1 rounded inline-block">
+                  <div className="text-xs font-mono text-slate-400 mb-3 bg-slate-900 px-2.5 py-1 rounded inline-block border border-slate-800">
                     {incident.symptoms}
                   </div>
                 )}
 
-                <div className="space-y-2 text-xs">
+                <div className="space-y-2.5 text-xs">
                   <div>
                     <span className="text-slate-400 block font-semibold text-[11px] uppercase tracking-wider">
                       Root Cause
                     </span>
-                    <p className="text-slate-200 mt-0.5">{incident.root_cause}</p>
+                    <p className="text-slate-200 mt-0.5 font-medium">{incident.root_cause}</p>
                   </div>
 
                   <div>
                     <span className="text-slate-400 block font-semibold text-[11px] uppercase tracking-wider">
                       Successful Action
                     </span>
-                    <p className="text-emerald-300 font-medium mt-0.5 flex items-start gap-1.5">
-                      <span className="text-emerald-400">?</span> {incident.resolution}
+                    <p className="text-emerald-300 font-medium mt-0.5 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span>{incident.resolution}</span>
                     </p>
                   </div>
+
+                  {incident.outcome && (
+                    <div className="pt-1">
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950/70 border border-emerald-800 text-emerald-300">
+                        OUTCOME: {incident.outcome}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {incident.why_relevant && incident.why_relevant.length > 0 && (
-                  <div className="mt-3 pt-3 border-t border-slate-800/80">
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-400 block mb-1">
+                  <div className="mt-4 pt-3 border-t border-slate-800/80">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-indigo-400 block mb-1.5">
                       Why relevant?
                     </span>
                     <ul className="space-y-1">
                       {incident.why_relevant.map((item, idx) => (
-                        <li key={idx} className="text-xs text-slate-400 flex items-center gap-1.5">
-                          <ArrowRight className="w-3 h-3 text-slate-500 shrink-0" />
+                        <li key={idx} className="text-xs text-slate-300 flex items-start gap-1.5">
+                          <ArrowRight className="w-3 h-3 text-indigo-400 shrink-0 mt-0.5" />
                           <span>{item}</span>
                         </li>
                       ))}

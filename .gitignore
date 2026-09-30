@@ -18,6 +18,9 @@ dist/
 # Go module download cache
 vendor/
 
+# Python virtual environments
+agent/.venv/
+
 # IDE
 .vscode/
 .idea/
