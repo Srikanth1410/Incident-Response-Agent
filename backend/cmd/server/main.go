@@ -10,10 +10,11 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/joho/godotenv"
 
-	"payrecall/internal/db"
-	"payrecall/internal/gateway"
-	"payrecall/internal/transaction"
-	"payrecall/internal/webhook"
+	"payrecall/backend/internal/db"
+	"payrecall/backend/internal/db/transaction"
+	"payrecall/backend/internal/gateway"
+	"payrecall/backend/internal/incident"
+	"payrecall/backend/internal/webhook"
 )
 
 func main() {
@@ -41,16 +42,33 @@ func main() {
 	wbRepo := webhook.NewRepository(pool)
 	wbHandler := webhook.NewHandler(wbRepo)
 
+	incRepo := incident.NewRepository(pool)
+	incHandler := incident.NewHandler(incRepo)
+
 	// Build the chi router.
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 
-	// API routes.
+	// ── Transaction + gateway + webhook routes (read-only, used by MCP tools) ─
 	r.Route("/api/transactions/{transactionID}", func(r chi.Router) {
 		r.Get("/", txnHandler.GetTransaction)
 		r.Get("/gateway", gwHandler.GetGatewayTransaction)
 		r.Get("/webhooks", wbHandler.ListWebhookAttempts)
+	})
+
+	// ── Incident lifecycle routes ────────────────────────────────────────────
+	// POST   /api/incidents              — agent opens an incident after diagnosis
+	// GET    /api/incidents/{id}         — fetch incident details
+	// PATCH  /api/incidents/{id}/resolve — operator confirms resolution + actions
+	// PATCH  /api/incidents/{id}/memory-saved — agent marks Hindsight retain done
+	r.Route("/api/incidents", func(r chi.Router) {
+		r.Post("/", incHandler.CreateIncident)
+		r.Route("/{incidentID}", func(r chi.Router) {
+			r.Get("/", incHandler.GetIncident)
+			r.Patch("/resolve", incHandler.ResolveIncident)
+			r.Patch("/memory-saved", incHandler.MarkMemorySaved)
+		})
 	})
 
 	port := os.Getenv("PORT")
